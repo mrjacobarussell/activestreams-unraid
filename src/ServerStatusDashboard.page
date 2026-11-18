@@ -9,6 +9,11 @@ Icon="streams.png"
 ?>
 
 <style>
+    /* Self-contained icon sizing - do not rely on ActiveStreamsDashboard.page's
+       .as-icon-img being present, since Unraid lets users show/hide dashboard
+       tiles independently and that sibling file may not be loaded. */
+    .ss-icon-img { width: 32px; height: 32px; }
+
     .ss-row-block {
         display: flex;
         align-items: center;
@@ -59,7 +64,7 @@ $mytiles[$plugin]['column1'] = <<<EOT
     <td>
       <div class='tile-header' id='activestreams-status-dashboard-card'>
         <div class='tile-header-left'>
-          <img src="{$icon_file}" class="as-icon-img icon">
+          <img src="{$icon_file}" class="ss-icon-img icon">
           <div class='section'>
             <h3 class='tile-header-main' id='activestreams-status-dashboard-title'>
               _(Server Status)_
