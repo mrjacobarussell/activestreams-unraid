@@ -354,9 +354,14 @@ if (!is_array($servers)) $servers = [];
         <?php else: ?>
             <?php foreach ($servers as $index => $server): ?>
                 <?php $isEnabled = ($server['enabled'] ?? '1') === '1'; ?>
+                <?php $isStatusEnabled = ($server['show_status'] ?? '1') === '1'; ?>
                 <div class="as-server-item<?php echo $isEnabled ? '' : ' disabled'; ?>" data-index="<?php echo $index; ?>">
                     <label class="as-toggle" title="<?php echo $isEnabled ? '_(Enabled)_' : '_(Disabled)_'; ?>">
                         <input type="checkbox" <?php echo $isEnabled ? 'checked' : ''; ?> onchange="toggleServer(<?php echo $index; ?>)">
+                        <span class="as-toggle-slider"></span>
+                    </label>
+                    <label class="as-toggle as-toggle-status" title="<?php echo $isStatusEnabled ? '_(Status Monitoring Enabled)_' : '_(Status Monitoring Disabled)_'; ?>">
+                        <input type="checkbox" <?php echo $isStatusEnabled ? 'checked' : ''; ?> onchange="toggleStatus(<?php echo $index; ?>)">
                         <span class="as-toggle-slider"></span>
                     </label>
                     <span class="server-type type-<?php echo htmlspecialchars($server['type']); ?>">
@@ -556,6 +561,35 @@ function toggleServer(index) {
     }, 'json').fail(function() {
         alert('_(Request failed)_');
         var toggle = $('.as-server-item[data-index="' + index + '"] .as-toggle input');
+        toggle.prop('checked', !toggle.prop('checked'));
+    });
+}
+
+function toggleStatus(index) {
+    $.post('/plugins/activestreams/activestreams_servers.php', {
+        action: 'toggle_status',
+        index: index
+    }, function(response) {
+        if (response.success) {
+            var item = $('.as-server-item[data-index="' + index + '"]');
+            var toggle = item.find('.as-toggle-status input');
+            if (response.show_status === '1') {
+                toggle.prop('checked', true);
+                item.find('.as-toggle-status').attr('title', '_(Status Monitoring Enabled)_');
+            } else {
+                toggle.prop('checked', false);
+                item.find('.as-toggle-status').attr('title', '_(Status Monitoring Disabled)_');
+            }
+            servers[index].show_status = response.show_status;
+        } else {
+            alert('_(Error toggling server)_: ' + response.error);
+            // Revert checkbox on failure
+            var toggle = $('.as-server-item[data-index="' + index + '"] .as-toggle-status input');
+            toggle.prop('checked', !toggle.prop('checked'));
+        }
+    }, 'json').fail(function() {
+        alert('_(Request failed)_');
+        var toggle = $('.as-server-item[data-index="' + index + '"] .as-toggle-status input');
         toggle.prop('checked', !toggle.prop('checked'));
     });
 }

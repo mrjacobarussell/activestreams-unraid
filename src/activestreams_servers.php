@@ -274,7 +274,8 @@ switch ($action) {
             'token' => $_POST['token'] ?? '',
             'ssl' => $_POST['ssl'] ?? '0',
             'ssl_verify' => $_POST['ssl_verify'] ?? '0',
-            'enabled' => '1'
+            'enabled' => '1',
+            'show_status' => $_POST['show_status'] ?? '1'
         ];
 
         $validationErrors = validateServerData($serverData);
@@ -310,7 +311,8 @@ switch ($action) {
             'token' => $_POST['token'] ?? '',
             'ssl' => $_POST['ssl'] ?? '0',
             'ssl_verify' => $_POST['ssl_verify'] ?? '0',
-            'enabled' => $servers[$index]['enabled'] ?? '1'
+            'enabled' => $servers[$index]['enabled'] ?? '1',
+            'show_status' => $_POST['show_status'] ?? ($servers[$index]['show_status'] ?? '1')
         ];
 
         $validationErrors = validateServerData($serverData);
@@ -358,6 +360,24 @@ switch ($action) {
 
         if (saveServers($servers)) {
             echo json_encode(['success' => true, 'enabled' => $servers[$index]['enabled']]);
+        } else {
+            echo json_encode(['success' => false, 'error' => 'Failed to save']);
+        }
+        break;
+
+    case 'toggle_status':
+        $index = (int)($_POST['index'] ?? -1);
+        $servers = loadServers();
+
+        if ($index < 0 || $index >= count($servers)) {
+            echo json_encode(['success' => false, 'error' => 'Invalid index']);
+            break;
+        }
+
+        $servers[$index]['show_status'] = ($servers[$index]['show_status'] ?? '1') === '1' ? '0' : '1';
+
+        if (saveServers($servers)) {
+            echo json_encode(['success' => true, 'show_status' => $servers[$index]['show_status']]);
         } else {
             echo json_encode(['success' => false, 'error' => 'Failed to save']);
         }
