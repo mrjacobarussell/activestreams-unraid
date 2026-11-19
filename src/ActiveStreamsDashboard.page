@@ -270,11 +270,90 @@ EOT;
         });
     }
 
+    // Debounce state per "server_type|user|device" row: { html: lastAppliedRowHtml,
+    // pendingHtml: newHtmlSeenOnce, streak: N }. Confirmed on a real Emby
+    // session: the same session's NowPlayingItem can flap between a live
+    // channel and a regular episode every ~2 seconds with nothing actually
+    // changing. A row's content only updates once the SAME new content is
+    // seen twice in a row, so a one-poll flap doesn't change what's shown.
+    var asRowState = {};
+
+    function rowKey($row) {
+        var device = $row.find('.as-device').attr('title') || '';
+        var user = $row.find('.as-user').attr('title') || '';
+        var serverTitle = $row.find('.as-server').attr('title') || '';
+        return serverTitle + '|' + user + '|' + device;
+    }
+
+    function debounceStreamRows(data) {
+        var $incoming = $('<div>').html(data);
+        var $incomingRows = $incoming.find('.as-row');
+        var seenKeys = {};
+        var $out = $('<div>');
+
+        $incomingRows.each(function() {
+            var $row = $(this);
+            var key = rowKey($row);
+            var html = $row.prop('outerHTML');
+            seenKeys[key] = true;
+
+            var state = asRowState[key];
+
+            if (!state) {
+                // First time seeing this row's identity - show it immediately,
+                // nothing to debounce against yet.
+                asRowState[key] = { html: html, pendingHtml: null, streak: 0 };
+                $out.append(html);
+                return;
+            }
+
+            if (html === state.html) {
+                // Unchanged from what's displayed - clear any pending flap.
+                state.pendingHtml = null;
+                state.streak = 0;
+                $out.append(state.html);
+                return;
+            }
+
+            if (html === state.pendingHtml) {
+                state.streak++;
+            } else {
+                state.pendingHtml = html;
+                state.streak = 1;
+            }
+
+            if (state.streak >= 2) {
+                // Seen the same new content twice in a row - accept it.
+                state.html = html;
+                state.pendingHtml = null;
+                state.streak = 0;
+                $out.append(state.html);
+            } else {
+                // Only seen once so far - keep showing the previous content.
+                $out.append(state.html);
+            }
+        });
+
+        // Drop state for rows that no longer appear at all (stream actually ended).
+        for (var key in asRowState) {
+            if (!seenKeys[key]) {
+                delete asRowState[key];
+            }
+        }
+
+        return $out.html() || '';
+    }
+
     function updateActiveStreamsDashboard() {
         $.get("/plugins/activestreams/activestreams_api.php", function(data) {
             if (data) {
-                // 1. Update list
-                $("#activestreams_streams").html(data);
+                var hasRows = data.indexOf("as-row") !== -1;
+
+                // 1. Update list (debounced per-row if there are actual stream
+                // rows to debounce; status/error/empty messages pass through
+                // untouched since there's nothing row-shaped to compare).
+                var displayHtml = hasRows ? debounceStreamRows(data) : data;
+                $("#activestreams_streams").html(displayHtml);
 
                 // 2. Update count
                 var count = $("#activestreams_streams .as-row").length;
