@@ -118,6 +118,46 @@ EOT;
 <script>
     var ssPollInterval = <?=$poll_interval;?>;
 
+    // Debounce state per "rowId|serverTitle" dot: { cls: lastAppliedClass, offStreak: N }.
+    // The underlying session APIs (confirmed on a real Emby server) can flap a
+    // live/recording flag off for a single poll and back on the next one.
+    // Turning ON is applied immediately (never delay reporting something real
+    // started); turning OFF requires 2 consecutive off readings before the
+    // dot actually goes black, so a one-poll API hiccup doesn't flicker.
+    var ssDotState = {};
+
+    function applyRowWithDebounce(rowId, $incomingRow) {
+        var $row = $('#' + rowId);
+        var $dots = $incomingRow.find('.ss-dot');
+
+        $row.empty();
+
+        $dots.each(function() {
+            var $dot = $(this);
+            var title = $dot.attr('title') || '';
+            var key = rowId + '|' + title;
+            var incomingOn = !$dot.hasClass('ss-off-black');
+            var incomingClass = $dot.attr('class');
+
+            var state = ssDotState[key] || { cls: 'ss-dot ss-off-black', offStreak: 0 };
+
+            if (incomingOn) {
+                state.cls = incomingClass;
+                state.offStreak = 0;
+            } else {
+                state.offStreak++;
+                if (state.offStreak >= 2) {
+                    state.cls = incomingClass;
+                }
+                // offStreak == 1: keep the previous (on) class displayed.
+            }
+
+            ssDotState[key] = state;
+
+            $row.append($('<span>').attr('class', state.cls).attr('title', title));
+        });
+    }
+
     function updateServerStatusDashboard() {
         $.get("/plugins/activestreams/activestreams_status.php", function(data) {
             var trimmed = $.trim(data);
@@ -135,8 +175,8 @@ EOT;
             $('#activestreams-status-dashboard-card').removeClass('ss-poll-error');
 
             var $data = $(data);
-            $('#ss-row-live').html($data.filter('#ss-row-live').html());
-            $('#ss-row-recording').html($data.filter('#ss-row-recording').html());
+            applyRowWithDebounce('ss-row-live', $data.filter('#ss-row-live'));
+            applyRowWithDebounce('ss-row-recording', $data.filter('#ss-row-recording'));
         }).fail(function() {
             // Request failed (500/404/etc) - flag the tile so frozen, stale
             // dots aren't mistaken for a fresh read.
