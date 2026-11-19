@@ -1,10 +1,10 @@
 <?xml version='1.0' standalone='yes'?>
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "activestreams">
-<!ENTITY author    "gthrift">
-<!ENTITY version   "2026.08.20-beta3">
+<!ENTITY author    "mrjacobarussell (fork of gthrift)">
+<!ENTITY version   "2026.11.19-serverstatus">
 <!ENTITY launch    "Settings/ActiveStreamsSettings">
-<!ENTITY gitURL    "https://raw.githubusercontent.com/gthrift/activestreams-unraid/main
+<!ENTITY gitURL    "https://raw.githubusercontent.com/mrjacobarussell/activestreams-unraid/feature/server-status-widget">
 <!ENTITY pluginURL "&gitURL;/activestreams_test.plg">
 <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 <!ENTITY plgPATH   "/boot/config/plugins/&name;">
@@ -21,6 +21,13 @@
         min="6.12.0">
 
 <CHANGES>
+###2026.11.19-serverstatus
+- Test build from mrjacobarussell's fork (feature/server-status-widget branch)
+- Adds Dispatcharr support (merged from upstream PR #43)
+- Adds a new Server Status dashboard widget: per-server Live TV / recording
+  indicator dots, independent per-server toggle in Settings, Jellyfin
+  support untested (no Jellyfin Live TV instance to verify against)
+
 ###2026.08.20-beta3
 - Beta build for testing
 
@@ -38,7 +45,7 @@
 </CHANGES>
 
 <OVERVIEW>
-A plugin to create a dashboard widget that shows your active streams from Plex, Emby, and Jellyfin servers (TEST - direct install)
+A plugin to create a dashboard widget that shows your active streams from Plex, Emby, Jellyfin, and Dispatcharr servers, plus a new Server Status widget showing per-server Live TV / recording indicators (TEST - direct install from mrjacobarussell's fork)
 </OVERVIEW>
 
 <FILE Run="/bin/bash">
@@ -71,6 +78,18 @@ A plugin to create a dashboard widget that shows your active streams from Plex, 
     <URL>&gitURL;/src/activestreams_servers.php</URL>
 </FILE>
 
+<FILE Name="&emhttp;/activestreams_livetv.php">
+    <URL>&gitURL;/src/activestreams_livetv.php</URL>
+</FILE>
+
+<FILE Name="&emhttp;/activestreams_status.php">
+    <URL>&gitURL;/src/activestreams_status.php</URL>
+</FILE>
+
+<FILE Name="&emhttp;/ServerStatusDashboard.page">
+    <URL>&gitURL;/src/ServerStatusDashboard.page</URL>
+</FILE>
+
 <!-- Icon/image files from metadata/ -->
 <FILE Name="&emhttp;/emby.png">
     <URL>&gitURL;/metadata/emby.png</URL>
@@ -86,6 +105,10 @@ A plugin to create a dashboard widget that shows your active streams from Plex, 
 
 <FILE Name="&emhttp;/streams.png">
     <URL>&gitURL;/metadata/streams.png</URL>
+</FILE>
+
+<FILE Name="&emhttp;/dispatcharr.png">
+    <URL>&gitURL;/metadata/dispatcharr.png</URL>
 </FILE>
 
 <FILE Run="/bin/bash">
