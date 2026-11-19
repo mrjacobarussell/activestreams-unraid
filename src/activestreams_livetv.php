@@ -30,45 +30,20 @@ function detectPlexLiveTv($sessionsData) {
 }
 
 /**
- * Detect if any Plex recording is in progress, server-wide.
- *
- * IMPORTANT: this does NOT use the /activities endpoint's "grabber.grab"
- * activity type, despite that looking plausible from the docs. Confirmed
- * against two real simultaneous recordings plus a real live-only (not
- * recording) viewer: Plex creates an identical grabber.grab/inprogress
- * activity for ANY tuned live channel, recording or not — so it cannot
- * distinguish "being recorded to the library" from "just being watched
- * live". The reliable signal is /media/subscriptions/scheduled, whose
- * MediaGrabOperation entries only exist for actual grab/record jobs.
- *
- * @param array $scheduledData Decoded Plex /media/subscriptions/scheduled response
- * @return bool True if any MediaGrabOperation has status == "inprogress"
- */
-function detectPlexRecording($scheduledData) {
-    if (!isset($scheduledData['MediaContainer']['MediaGrabOperation'])) {
-        return false;
-    }
-
-    $operations = $scheduledData['MediaContainer']['MediaGrabOperation'];
-    if (!is_array($operations)) {
-        return false;
-    }
-
-    foreach ($operations as $op) {
-        if (($op['status'] ?? '') === 'inprogress') {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/**
  * Return the set of Plex episode guids (e.g. "plex://episode/{id}") whose
  * recording is currently in progress, for matching against a specific live
  * session's own "guid" field — lets a specific live session be identified
  * as "recording" vs "just being watched live" rather than assuming any
  * server-wide recording applies to every live session.
+ *
+ * IMPORTANT: does NOT use the /activities endpoint's "grabber.grab"
+ * activity type, despite that looking plausible from the docs. Confirmed
+ * against two real simultaneous recordings plus a real live-only (not
+ * recording) viewer: Plex creates an identical grabber.grab/inprogress
+ * activity for ANY tuned live channel, recording or not — so it cannot
+ * distinguish "being recorded to the library" from "just being watched
+ * live". /media/subscriptions/scheduled's MediaGrabOperation entries only
+ * exist for actual grab/record jobs.
  *
  * @param array $scheduledData Decoded Plex /media/subscriptions/scheduled response
  * @return array<string> episode guids currently being recorded

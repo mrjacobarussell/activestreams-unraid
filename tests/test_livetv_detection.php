@@ -10,20 +10,9 @@ assertTrue(detectPlexLiveTv(['MediaContainer' => ['Metadata' => [['live' => 1]]]
 assertTrue(detectPlexLiveTv(['MediaContainer' => ['Metadata' => [['title' => 'Movie']]]]) === false, 'plex no live flag = false');
 assertTrue(detectPlexLiveTv(['MediaContainer' => []]) === false, 'plex empty sessions = false');
 
-// Plex recording: confirmed on 2026-11-19 against two real simultaneous DVR
-// recordings plus a real live-only (not recording) viewer at the same time.
-// The /activities "grabber.grab" activity type (tried first) turned out to
-// fire for ANY tuned live channel, recording or not, so it cannot
-// distinguish the two. /media/subscriptions/scheduled's MediaGrabOperation
-// entries only exist for actual grab/record jobs — confirmed correct: the
-// live-only viewer had zero entries there while both real recordings had
-// status=inprogress entries.
-assertTrue(detectPlexRecording(['MediaContainer' => ['MediaGrabOperation' => [['status' => 'inprogress']]]]) === true, 'plex scheduled inprogress = real recording detected');
-assertTrue(detectPlexRecording(['MediaContainer' => ['MediaGrabOperation' => [['status' => 'scheduled']]]]) === false, 'plex scheduled-but-not-started = false');
-assertTrue(detectPlexRecording(['MediaContainer' => ['MediaGrabOperation' => [['status' => 'complete']]]]) === false, 'plex completed recording = false');
-assertTrue(detectPlexRecording(['MediaContainer' => []]) === false, 'plex no scheduled operations = false');
-
-// Plex per-session recording match: a live session is "recording" only if
+// Plex per-session recording match: confirmed on 2026-11-19 against two real
+// simultaneous DVR recordings plus a real live-only (not recording) viewer
+// at the same time. A live session is "recording" only if
 // its own guid appears in the recording set, not just because something
 // else on the server is recording (the real bug this replaced).
 assertTrue(

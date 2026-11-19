@@ -113,15 +113,7 @@ For each active stream, the widget shows:
 - **User**: Username watching
 - **Progress**: Current position / Total duration (with play/pause icon). Dispatcharr live channels show time watched and "Live"
 - **Transcoding**: Exchange icon appears when transcoding. Dispatcharr rows show an info icon with source stream details
-
-## Server Status Widget
-
-In addition to the main streams widget, Active Streams adds a second dashboard tile, **Server Status**, that shows two rows of colored dots - one dot per status-enabled server, in Settings order:
-
-- **Live TV**: lights up when that server has an active Live TV session (Plex, Emby, or Jellyfin)
-- **Recording**: lights up when that server has an in-progress Live TV recording
-
-Each server has its own **Status** toggle in **Settings > Active Streams Settings**, separate from the existing **Enabled** toggle - a server can be shown in the main streams widget without appearing on the Server Status dots, or vice versa. Dispatcharr servers aren't shown on this widget, since Dispatcharr has no Live TV/recording status endpoint to poll.
+- **Live TV / Recording**: Plex, Emby, and Jellyfin live TV sessions show "Live" or "Recording" instead of a timestamp. Emby/Jellyfin background recordings with no viewer (which otherwise wouldn't appear anywhere, since those platforms create no session for them) show as their own row with the recording's name and no user/device.
 
 ## Troubleshooting
 
