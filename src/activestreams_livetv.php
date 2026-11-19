@@ -142,3 +142,46 @@ function detectEmbyJellyfinRecording($timersData) {
 
     return false;
 }
+
+/**
+ * Return the list of currently in-progress Emby/Jellyfin recordings.
+ *
+ * Unlike Plex (which always creates a live session entry for an active
+ * tuner, recording or not - confirmed on real data), Emby/Jellyfin create
+ * NO session at all for a background recording with no viewer, so there's
+ * nothing in Sessions to represent it. This list is used to synthesize a
+ * stream-list row for exactly that case.
+ *
+ * @param array $recordingsData Decoded Emby/Jellyfin
+ *   /LiveTv/Recordings?IsInProgress=true response ({'Items': [...]})
+ * @return array<array{id: string, name: string}> in-progress recordings
+ */
+function getEmbyJellyfinActiveRecordings($recordingsData) {
+    if (!is_array($recordingsData)) {
+        return [];
+    }
+
+    $items = isset($recordingsData['Items']) ? $recordingsData['Items'] : $recordingsData;
+    if (!is_array($items)) {
+        return [];
+    }
+
+    $recordings = [];
+    foreach ($items as $item) {
+        if (($item['Status'] ?? '') !== 'InProgress') {
+            continue;
+        }
+
+        $name = $item['SeriesName'] ?? ($item['Name'] ?? 'Unknown');
+        if (isset($item['SeriesName']) && isset($item['Name']) && $item['Name'] !== $item['SeriesName']) {
+            $name = $item['SeriesName'] . ' - ' . $item['Name'];
+        }
+
+        $recordings[] = [
+            'id' => (string)($item['Id'] ?? ''),
+            'name' => $name
+        ];
+    }
+
+    return $recordings;
+}

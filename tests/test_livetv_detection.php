@@ -46,4 +46,21 @@ assertTrue(detectEmbyJellyfinRecording([['Status' => 'InProgress']]) === true, '
 assertTrue(detectEmbyJellyfinRecording(['Items' => [['Status' => 'Cancelled']]]) === false, 'non-InProgress timer = false');
 assertTrue(detectEmbyJellyfinRecording(['Items' => []]) === false, 'no timers = false');
 
+// Emby/Jellyfin active recordings list: used to synthesize a stream-list row
+// for a background recording with no viewer (Emby/Jellyfin create no
+// session at all for that case, unlike Plex - confirmed on a real
+// in-progress recording, "NBC5 News Now at 3PM", with zero matching session).
+assertTrue(
+    getEmbyJellyfinActiveRecordings(['Items' => [['Id' => '123', 'Status' => 'InProgress', 'Name' => 'NBC5 News Now at 3PM', 'SeriesName' => 'NBC5 News Now at 3PM']]])
+        === [['id' => '123', 'name' => 'NBC5 News Now at 3PM']],
+    'getEmbyJellyfinActiveRecordings: series name used when Name == SeriesName'
+);
+assertTrue(
+    getEmbyJellyfinActiveRecordings(['Items' => [['Id' => '456', 'Status' => 'InProgress', 'Name' => 'Pilot', 'SeriesName' => 'The Institute']]])
+        === [['id' => '456', 'name' => 'The Institute - Pilot']],
+    'getEmbyJellyfinActiveRecordings: series + episode name combined'
+);
+assertTrue(getEmbyJellyfinActiveRecordings(['Items' => [['Id' => '789', 'Status' => 'Cancelled']]]) === [], 'getEmbyJellyfinActiveRecordings: non-InProgress excluded');
+assertTrue(getEmbyJellyfinActiveRecordings(['Items' => []]) === [], 'getEmbyJellyfinActiveRecordings: empty when no recordings');
+
 echo "ALL PASS\n";

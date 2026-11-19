@@ -694,6 +694,56 @@ function checkServerRecording($server) {
     return detectEmbyJellyfinRecording($data) ? ['*'] : [];
 }
 
+/**
+ * Fetch the list of currently in-progress recordings for an Emby/Jellyfin
+ * server, for synthesizing a stream-list row representing a background
+ * recording with no viewer (see getEmbyJellyfinActiveRecordings' docblock
+ * for why this is needed - Emby/Jellyfin create no session at all for that
+ * case, unlike Plex).
+ *
+ * @return array<array{id: string, name: string}>
+ */
+function getEmbyJellyfinRecordingItems($server) {
+    if (!in_array($server['type'], ['emby', 'jellyfin'], true)) {
+        return [];
+    }
+
+    $protocol = ($server['ssl'] === '1' || $server['ssl'] === true) ? 'https' : 'http';
+
+    if ($server['type'] === 'emby') {
+        $url = "$protocol://{$server['host']}:{$server['port']}/emby/LiveTv/Recordings?IsInProgress=true";
+        $headers = ['X-Emby-Token: ' . $server['token']];
+    } else {
+        $url = "$protocol://{$server['host']}:{$server['port']}/LiveTv/Recordings?IsInProgress=true";
+        $headers = ['Authorization: MediaBrowser Client="ActiveStreams", Device="Unraid", DeviceId="activestreams-plugin", Version="1.0.0", Token="' . $server['token'] . '"'];
+    }
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    $sslVerify = isset($server['ssl_verify']) && ($server['ssl_verify'] === '1' || $server['ssl_verify'] === true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $sslVerify);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $sslVerify ? 2 : 0);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($http_code !== 200 || !$response) {
+        return [];
+    }
+
+    $data = json_decode($response, true);
+    if (!is_array($data)) {
+        return [];
+    }
+
+    return getEmbyJellyfinActiveRecordings($data);
+}
+
 $allStreams = [];
 $errors = [];
 
@@ -754,6 +804,44 @@ foreach ($handles as $index => $ch) {
                     }
                 }
                 unset($stream);
+            }
+        }
+
+        // Emby/Jellyfin create no session at all for a background recording
+        // with no viewer (confirmed live: a real in-progress recording had
+        // zero matching session), unlike Plex which always has one. Checked
+        // unconditionally, not gated on $hasLiveStream, since that's exactly
+        // the case with nothing live to gate on. Skipped if a live+recording
+        // row already exists for this server, to avoid a near-duplicate row
+        // when something is both being watched live and recorded at once.
+        if (in_array($server['type'], ['emby', 'jellyfin'], true)) {
+            $alreadyHasRecordingRow = false;
+            foreach ($result['streams'] as $stream) {
+                if (!empty($stream['live']) && !empty($stream['recording'])) {
+                    $alreadyHasRecordingRow = true;
+                    break;
+                }
+            }
+
+            if (!$alreadyHasRecordingRow) {
+                foreach (getEmbyJellyfinRecordingItems($server) as $recording) {
+                    $result['streams'][] = [
+                        'server_name' => $server['name'],
+                        'server_type' => $server['type'],
+                        'title' => $recording['name'],
+                        'user' => '—',
+                        'device' => '—',
+                        'state' => 'playing',
+                        'progress' => 0,
+                        'duration' => 0,
+                        'live' => true,
+                        'guid' => null,
+                        'session_id' => 'recording-' . $recording['id'],
+                        'recording' => true,
+                        'transcoding' => false,
+                        'transcode_details' => []
+                    ];
+                }
             }
         }
 
