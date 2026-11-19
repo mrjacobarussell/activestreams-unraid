@@ -20,12 +20,23 @@ if (!file_exists($servers_file)) {
 $servers = json_decode(file_get_contents($servers_file), true);
 
 if (json_last_error() !== JSON_ERROR_NONE || !is_array($servers)) {
+    error_log("Active Streams: JSON decode error in servers.json (status endpoint) - " . json_last_error_msg());
     exit;
 }
 
-// Independent of `enabled` - this is a separate poll loop from activestreams_api.php
+// Independent of `enabled` - this is a separate poll loop from activestreams_api.php.
+// Missing show_status key defaults to "on" to match ActiveStreamsSettings.page and
+// activestreams_servers.php, so pre-upgrade servers.json records aren't excluded.
 $servers = array_values(array_filter($servers, function ($server) {
-    return isset($server['show_status']) && $server['show_status'] === '1';
+    return ($server['show_status'] ?? '1') === '1';
+}));
+
+// Only plex/emby/jellyfin have Sessions/Timers-style endpoints to poll for Live TV
+// and recording status. Dispatcharr (and any other unsupported type) falls through
+// to a permanently-black dot in buildStatusCurlHandles(), which looks identical to a
+// verified-idle server - exclude it here instead of rendering a misleading dot.
+$servers = array_values(array_filter($servers, function ($server) {
+    return in_array($server['type'] ?? '', ['plex', 'emby', 'jellyfin'], true);
 }));
 
 if (empty($servers)) {

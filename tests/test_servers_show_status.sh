@@ -1,11 +1,30 @@
 #!/bin/bash
 # tests/test_servers_show_status.sh
+#
+# WARNING: this test temporarily overwrites your live servers.json (real API
+# tokens included) while it runs, then restores it. Opt in explicitly.
 set -e
+
+[ "$AS_ALLOW_PROD_CONFIG_TEST" = "1" ] || { echo "Set AS_ALLOW_PROD_CONFIG_TEST=1 to run this test - it temporarily overwrites your live servers.json" >&2; exit 1; }
+
 CFG_DIR=/boot/config/plugins/activestreams
 BACKUP="$CFG_DIR/servers.json.plan-test-bak"
 
-cp "$CFG_DIR/servers.json" "$BACKUP" 2>/dev/null || echo '[]' > "$BACKUP"
-restore() { cp "$BACKUP" "$CFG_DIR/servers.json"; rm -f "$BACKUP"; }
+if [ -f "$CFG_DIR/servers.json" ]; then
+    cp "$CFG_DIR/servers.json" "$BACKUP" || { echo "FATAL: cannot back up live config, refusing to run" >&2; exit 1; }
+    RESTORE_MODE="file"
+else
+    RESTORE_MODE="none"
+fi
+
+restore() {
+    if [ "$RESTORE_MODE" = "file" ]; then
+        cp "$BACKUP" "$CFG_DIR/servers.json"
+        rm -f "$BACKUP"
+    else
+        rm -f "$CFG_DIR/servers.json"
+    fi
+}
 trap restore EXIT
 
 echo '[]' > "$CFG_DIR/servers.json"

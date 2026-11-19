@@ -6,6 +6,7 @@ function assertTrue($cond, $msg) { if (!$cond) { fwrite(STDERR, "FAIL: $msg\n");
 
 // Plex live TV: a session with "live":"1" among Metadata
 assertTrue(detectPlexLiveTv(['MediaContainer' => ['Metadata' => [['live' => '1']]]]) === true, 'plex live flag "1" detected');
+assertTrue(detectPlexLiveTv(['MediaContainer' => ['Metadata' => [['live' => 1]]]]) === true, 'plex live flag integer 1 detected');
 assertTrue(detectPlexLiveTv(['MediaContainer' => ['Metadata' => [['title' => 'Movie']]]]) === false, 'plex no live flag = false');
 assertTrue(detectPlexLiveTv(['MediaContainer' => []]) === false, 'plex empty sessions = false');
 

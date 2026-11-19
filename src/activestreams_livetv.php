@@ -21,7 +21,7 @@ function detectPlexLiveTv($sessionsData) {
     }
 
     foreach ($metadata as $item) {
-        if (isset($item['live']) && $item['live'] === '1') {
+        if (isset($item['live']) && (string)$item['live'] === '1') {
             return true;
         }
     }
