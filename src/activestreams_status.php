@@ -56,7 +56,7 @@ function buildStatusCurlHandles($server) {
     switch ($server['type']) {
         case 'plex':
             $sessionsUrl = "$protocol://{$server['host']}:{$server['port']}/status/sessions";
-            $recordingUrl = "$protocol://{$server['host']}:{$server['port']}/activities";
+            $recordingUrl = "$protocol://{$server['host']}:{$server['port']}/media/subscriptions/scheduled";
             $headers = [
                 'Accept: application/json',
                 'X-Plex-Token: ' . $server['token']

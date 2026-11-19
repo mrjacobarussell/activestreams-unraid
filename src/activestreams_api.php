@@ -8,6 +8,8 @@ error_reporting(E_ALL);
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 
+require __DIR__ . '/activestreams_livetv.php';
+
 $cfg_file = "/boot/config/plugins/activestreams/activestreams.cfg";
 $servers_file = "/boot/config/plugins/activestreams/servers.json";
 
@@ -307,6 +309,8 @@ function parsePlexResponse($server, $response) {
                 'state' => $state === 'paused' ? 'paused' : 'playing',
                 'progress' => $viewOffset,
                 'duration' => $duration,
+                'live' => isset($session['live']) && (string)$session['live'] === '1',
+                'guid' => $session['guid'] ?? null,
                 'transcoding' => $isTranscoding,
                 'transcode_details' => $transcodeDetails
             ];
@@ -452,6 +456,7 @@ function parseEmbyJellyfinResponse($server, $response) {
                 'state' => $isPaused ? 'paused' : 'playing',
                 'progress' => $position,
                 'duration' => $duration,
+                'live' => ($item['Type'] ?? '') === 'TvChannel',
                 'transcoding' => $isTranscoding,
                 'transcode_details' => $transcodeDetails
             ];
@@ -620,6 +625,73 @@ function parseDispatcharrResponse($server, $response) {
     return ['streams' => $streams];
 }
 
+/**
+ * One extra, synchronous request per server (only called for a server that
+ * actually has a live stream) returning which specific live sessions are
+ * currently being recorded.
+ *
+ * For Plex, returns the exact set of episode guids currently being
+ * recorded (per getPlexRecordingGuids) — confirmed against two
+ * simultaneous real recordings plus a real live-only viewer that this
+ * exact-guid match correctly distinguishes a session being recorded from
+ * a session that's merely being watched live. For Emby/Jellyfin, no
+ * confirmed per-session matching field is known yet, so this falls back
+ * to a '*' sentinel meaning "something is recording on this server" —
+ * every live session on that server is marked recording, which is a
+ * known coarser approximation for those two platforms only.
+ *
+ * @return array<string> guids currently recording, or ['*'] for the
+ *   Emby/Jellyfin any-live-session fallback, or [] if nothing is recording
+ */
+function checkServerRecording($server) {
+    $protocol = ($server['ssl'] === '1' || $server['ssl'] === true) ? 'https' : 'http';
+
+    switch ($server['type']) {
+        case 'plex':
+            $url = "$protocol://{$server['host']}:{$server['port']}/media/subscriptions/scheduled";
+            $headers = ['Accept: application/json', 'X-Plex-Token: ' . $server['token']];
+            break;
+        case 'emby':
+            $url = "$protocol://{$server['host']}:{$server['port']}/emby/LiveTv/Timers";
+            $headers = ['X-Emby-Token: ' . $server['token']];
+            break;
+        case 'jellyfin':
+            $url = "$protocol://{$server['host']}:{$server['port']}/LiveTv/Timers";
+            $headers = ['Authorization: MediaBrowser Client="ActiveStreams", Device="Unraid", DeviceId="activestreams-plugin", Version="1.0.0", Token="' . $server['token'] . '"'];
+            break;
+        default:
+            return [];
+    }
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    $sslVerify = isset($server['ssl_verify']) && ($server['ssl_verify'] === '1' || $server['ssl_verify'] === true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $sslVerify);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $sslVerify ? 2 : 0);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($http_code !== 200 || !$response) {
+        return [];
+    }
+
+    $data = json_decode($response, true);
+    if (!is_array($data)) {
+        return [];
+    }
+
+    if ($server['type'] === 'plex') {
+        return getPlexRecordingGuids($data);
+    }
+    return detectEmbyJellyfinRecording($data) ? ['*'] : [];
+}
+
 $allStreams = [];
 $errors = [];
 
@@ -658,6 +730,31 @@ foreach ($handles as $index => $ch) {
     if (isset($result['error'])) {
         $errors[] = "{$server['name']}: {$result['error']}";
     } elseif (isset($result['streams'])) {
+        $hasLiveStream = false;
+        foreach ($result['streams'] as $stream) {
+            if (!empty($stream['live'])) {
+                $hasLiveStream = true;
+                break;
+            }
+        }
+
+        if ($hasLiveStream && in_array($server['type'], ['plex', 'emby', 'jellyfin'], true)) {
+            $recordingGuids = checkServerRecording($server);
+            $recordAnyLive = in_array('*', $recordingGuids, true);
+
+            if (!empty($recordingGuids)) {
+                foreach ($result['streams'] as &$stream) {
+                    if (empty($stream['live'])) {
+                        continue;
+                    }
+                    if ($recordAnyLive || in_array($stream['guid'] ?? null, $recordingGuids, true)) {
+                        $stream['recording'] = true;
+                    }
+                }
+                unset($stream);
+            }
+        }
+
         $allStreams = array_merge($allStreams, $result['streams']);
     }
 
@@ -684,14 +781,16 @@ if (empty($allStreams)) {
         $serverType = $s['server_type'];
         
         $isPaused = ($s['state'] === 'paused');
-        $statusColor = $isPaused ? "#f0ad4e" : "#8cc43c";
+        $isRecording = !empty($s['recording']);
+        $statusColor = $isRecording ? "#d9534f" : ($isPaused ? "#f0ad4e" : "#8cc43c");
 
         $isLive = !empty($s['live']);
         $progressStr = formatTime($s['progress']);
         if ($isLive) {
-            // Live TV has no duration; show time watched instead
-            $timeDisplay = "$progressStr &middot; Live";
-            $timeTooltip = htmlspecialchars('Watching for ' . formatTimeFull($s['progress']));
+            // Live TV has no fixed duration; show time watched/recorded instead
+            $liveLabel = $isRecording ? 'Recording' : 'Live';
+            $timeDisplay = "$progressStr &middot; $liveLabel";
+            $timeTooltip = htmlspecialchars(($isRecording ? 'Recording for ' : 'Watching for ') . formatTimeFull($s['progress']));
         } else {
             $durationStr = formatTime($s['duration']);
             $timeDisplay = "$progressStr / $durationStr";
@@ -733,7 +832,7 @@ if (empty($allStreams)) {
         echo "<span class='as-time'>";
         echo $transcodeHtml;
         if ($showPlayStatus) {
-            $statusText = $isLive ? "Live" : ($isPaused ? "Paused" : "Playing");
+            $statusText = $isRecording ? "Recording" : ($isLive ? "Live" : ($isPaused ? "Paused" : "Playing"));
             echo "<span style='color:{$statusColor}; cursor:default;' title='{$timeTooltip}'>{$statusText}</span>";
         } else {
             echo "<span style='color:{$statusColor};'>{$timeDisplay}</span>";

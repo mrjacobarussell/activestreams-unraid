@@ -10,14 +10,30 @@ assertTrue(detectPlexLiveTv(['MediaContainer' => ['Metadata' => [['live' => 1]]]
 assertTrue(detectPlexLiveTv(['MediaContainer' => ['Metadata' => [['title' => 'Movie']]]]) === false, 'plex no live flag = false');
 assertTrue(detectPlexLiveTv(['MediaContainer' => []]) === false, 'plex empty sessions = false');
 
-// Plex recording: confirmed against a real in-progress DVR recording on 2026-11-19 —
-// Plex actually reports type=grabber.grab with Context.status=inprogress, not
-// "livetv.recording" (that string is kept below only as a documented fallback).
-assertTrue(detectPlexRecording(['MediaContainer' => ['Activity' => [['type' => 'grabber.grab', 'title' => 'Recording', 'Context' => ['status' => 'inprogress']]]]]) === true, 'plex grabber.grab inprogress = real recording detected');
-assertTrue(detectPlexRecording(['MediaContainer' => ['Activity' => [['type' => 'grabber.grab', 'Context' => ['status' => 'complete']]]]]) === false, 'plex grabber.grab not inprogress = false');
-assertTrue(detectPlexRecording(['MediaContainer' => ['Activity' => [['type' => 'livetv.recording']]]]) === true, 'plex livetv.recording fallback still detected');
-assertTrue(detectPlexRecording(['MediaContainer' => ['Activity' => [['type' => 'media.generate']]]]) === false, 'plex unrelated activity = false');
-assertTrue(detectPlexRecording(['MediaContainer' => []]) === false, 'plex no activities = false');
+// Plex recording: confirmed on 2026-11-19 against two real simultaneous DVR
+// recordings plus a real live-only (not recording) viewer at the same time.
+// The /activities "grabber.grab" activity type (tried first) turned out to
+// fire for ANY tuned live channel, recording or not, so it cannot
+// distinguish the two. /media/subscriptions/scheduled's MediaGrabOperation
+// entries only exist for actual grab/record jobs — confirmed correct: the
+// live-only viewer had zero entries there while both real recordings had
+// status=inprogress entries.
+assertTrue(detectPlexRecording(['MediaContainer' => ['MediaGrabOperation' => [['status' => 'inprogress']]]]) === true, 'plex scheduled inprogress = real recording detected');
+assertTrue(detectPlexRecording(['MediaContainer' => ['MediaGrabOperation' => [['status' => 'scheduled']]]]) === false, 'plex scheduled-but-not-started = false');
+assertTrue(detectPlexRecording(['MediaContainer' => ['MediaGrabOperation' => [['status' => 'complete']]]]) === false, 'plex completed recording = false');
+assertTrue(detectPlexRecording(['MediaContainer' => []]) === false, 'plex no scheduled operations = false');
+
+// Plex per-session recording match: a live session is "recording" only if
+// its own guid appears in the recording set, not just because something
+// else on the server is recording (the real bug this replaced).
+assertTrue(
+    getPlexRecordingGuids(['MediaContainer' => ['MediaGrabOperation' => [
+        ['status' => 'inprogress', 'Metadata' => ['guid' => 'plex://episode/aaa']],
+        ['status' => 'scheduled', 'Metadata' => ['guid' => 'plex://episode/bbb']],
+    ]]]) === ['plex://episode/aaa'],
+    'getPlexRecordingGuids returns only inprogress guids'
+);
+assertTrue(getPlexRecordingGuids(['MediaContainer' => []]) === [], 'getPlexRecordingGuids empty when no operations');
 
 // Emby/Jellyfin live TV: NowPlayingItem.Type == TvChannel
 assertTrue(detectEmbyJellyfinLiveTv([['NowPlayingItem' => ['Type' => 'TvChannel']]]) === true, 'emby/jellyfin live tv channel detected');
