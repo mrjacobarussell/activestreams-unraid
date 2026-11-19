@@ -25,11 +25,12 @@ IconFA="film"
     }
     
     /* Server list */
-    .as-server-list { margin: 15px 0; }
+    .as-server-list { margin: 6px 0 15px; }
     .as-server-header {
         display: flex;
         align-items: center;
         padding: 0 15px;
+        margin-bottom: 4px;
         gap: 15px;
         font-size: 11px;
         text-transform: uppercase;
@@ -40,6 +41,11 @@ IconFA="film"
     .as-server-header .col-type { width: 80px; }
     .as-server-header .col-name,
     .as-server-header .col-host { flex: 1; }
+    /* Matches .server-actions (two icon-only .as-btn buttons, ~48px each,
+       plus the row's 10px gap between them) so the name/host header labels
+       line up with the actual name/host columns instead of being pushed
+       right by the row's trailing actions column. */
+    .as-server-header .col-actions { flex: 0 0 105px; width: 105px; }
     .as-server-item { 
         display: flex; 
         align-items: center; 
@@ -367,6 +373,7 @@ if (!is_array($servers)) $servers = [];
         <span class="col-type">_(Type)_</span>
         <span class="col-name">_(Name)_</span>
         <span class="col-host">_(Host)_</span>
+        <span class="col-actions"></span>
     </div>
     <?php endif; ?>
     <div class="as-server-list" id="serverList">

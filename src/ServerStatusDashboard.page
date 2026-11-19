@@ -52,9 +52,13 @@ Icon="streams.png"
         border-radius: 50%;
     }
 
-    .ss-on-green  { background-color: #2ecc71; }
-    .ss-on-red    { background-color: #e74c3c; }
-    .ss-off-black { background-color: #000; }
+    .ss-on-green  { background-color: #8cc43c; }
+    .ss-on-red    { background-color: #d9534f; }
+    .ss-off-black { background-color: #555; }
+
+    /* Applied to the tile header when a poll fails (500/404/etc), so stale
+       dots aren't mistaken for a fresh read. */
+    .ss-poll-error { opacity: 0.5; }
 </style>
 
 <?php
@@ -125,12 +129,19 @@ EOT;
             }
 
             // Non-empty response - make sure the tile is visible (handles a
-            // server being toggled on in Settings without a page reload).
+            // server being toggled on in Settings without a page reload) and
+            // clear any stale poll-error flag from a prior failed request.
             $('#activestreams-status-dashboard-card').closest('tbody').show();
+            $('#activestreams-status-dashboard-card').removeClass('ss-poll-error');
 
             var $data = $(data);
             $('#ss-row-live').html($data.filter('#ss-row-live').html());
             $('#ss-row-recording').html($data.filter('#ss-row-recording').html());
+        }).fail(function() {
+            // Request failed (500/404/etc) - flag the tile so frozen, stale
+            // dots aren't mistaken for a fresh read.
+            $('#activestreams-status-dashboard-card').closest('tbody').show();
+            $('#activestreams-status-dashboard-card').addClass('ss-poll-error');
         });
     }
 
