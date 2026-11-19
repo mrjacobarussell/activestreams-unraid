@@ -297,6 +297,24 @@ EOT;
         return serverTitle + '|' + user + '|' + device;
     }
 
+    function rowSignature($row) {
+        // What counts as "the same content" for debounce purposes: title and
+        // the status color (green=live/playing, red=recording, orange=paused).
+        // Deliberately excludes the progress timestamp / Playing-Paused text,
+        // which changes on every single poll - comparing full row HTML
+        // (including that) meant two consecutive polls almost never matched
+        // byte-for-byte even with nothing meaningful different, so a real
+        // content change could take many polls (30-60s+ observed live) to
+        // find a coincidental exact match instead of the intended ~2 polls.
+        var title = $row.find('.as-name-text').attr('title') || '';
+        // .last(), not .first(): the transcode icon (when present) also has
+        // an inline color style and always renders before the status span,
+        // so .first() would grab the transcode icon's fixed color instead
+        // of the actual play/pause/live/recording state.
+        var statusColor = $row.find('.as-time [style*="color:"]').last().attr('style') || '';
+        return title + '|' + statusColor;
+    }
+
     function debounceStreamRows(data) {
         var $incoming = $('<div>').html(data);
         var $incomingRows = $incoming.find('.as-row');
@@ -308,6 +326,7 @@ EOT;
             var $row = $(this);
             var key = rowKey($row);
             var html = $row.prop('outerHTML');
+            var signature = rowSignature($row);
             seenKeys[key] = true;
             order.push(key);
 
@@ -316,36 +335,41 @@ EOT;
             if (!state) {
                 // First time seeing this row's identity - show it immediately,
                 // nothing to debounce against yet.
-                asRowState[key] = { html: html, pendingHtml: null, streak: 0, missingStreak: 0 };
+                asRowState[key] = { html: html, signature: signature, pendingSignature: null, streak: 0, missingStreak: 0 };
                 htmlByKey[key] = html;
                 return;
             }
 
             state.missingStreak = 0;
 
-            if (html === state.html) {
-                // Unchanged from what's displayed - clear any pending flap.
-                state.pendingHtml = null;
+            if (signature === state.signature) {
+                // Same title/state as currently displayed - always show the
+                // fresh incoming HTML so the timestamp keeps ticking; only
+                // the identity (title/state) itself is debounced, not this.
+                state.html = html;
+                state.pendingSignature = null;
                 state.streak = 0;
-                htmlByKey[key] = state.html;
+                htmlByKey[key] = html;
                 return;
             }
 
-            if (html === state.pendingHtml) {
+            if (signature === state.pendingSignature) {
                 state.streak++;
             } else {
-                state.pendingHtml = html;
+                state.pendingSignature = signature;
                 state.streak = 1;
             }
 
             if (state.streak >= 2) {
-                // Seen the same new content twice in a row - accept it.
-                state.html = html;
-                state.pendingHtml = null;
+                // Seen the same new title/state twice in a row - accept it.
+                state.signature = signature;
+                state.pendingSignature = null;
                 state.streak = 0;
+                state.html = html;
             }
-            // Either way (accepted or still only seen once), show the
-            // current held content - never the raw one-off incoming value.
+            // Either way (accepted this poll, or still only seen once), show
+            // whatever is now the current held html - never a one-off
+            // unconfirmed reading.
             htmlByKey[key] = state.html;
         });
 
