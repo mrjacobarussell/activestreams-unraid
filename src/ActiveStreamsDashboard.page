@@ -279,6 +279,18 @@ EOT;
     var asRowState = {};
 
     function rowKey($row) {
+        // Prefer the server's own session id (unique per playback/recording
+        // session) when present - confirmed on real data that multiple
+        // simultaneous Plex live/recording sessions can share identical
+        // user+device (no distinct Player for a DVR recording), which
+        // collided different sessions onto the same debounce key and
+        // corrupted their displayed content.
+        var sessionId = $row.attr('data-session-id');
+        if (sessionId) {
+            var serverTitle = $row.find('.as-server').attr('title') || '';
+            return serverTitle + '|session:' + sessionId;
+        }
+
         var device = $row.find('.as-device').attr('title') || '';
         var user = $row.find('.as-user').attr('title') || '';
         var serverTitle = $row.find('.as-server').attr('title') || '';

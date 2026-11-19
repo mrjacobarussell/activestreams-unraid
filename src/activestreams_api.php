@@ -311,6 +311,7 @@ function parsePlexResponse($server, $response) {
                 'duration' => $duration,
                 'live' => isset($session['live']) && (string)$session['live'] === '1',
                 'guid' => $session['guid'] ?? null,
+                'session_id' => $session['sessionKey'] ?? null,
                 'transcoding' => $isTranscoding,
                 'transcode_details' => $transcodeDetails
             ];
@@ -457,6 +458,7 @@ function parseEmbyJellyfinResponse($server, $response) {
                 'progress' => $position,
                 'duration' => $duration,
                 'live' => ($item['Type'] ?? '') === 'TvChannel',
+                'session_id' => $session['Id'] ?? null,
                 'transcoding' => $isTranscoding,
                 'transcode_details' => $transcodeDetails
             ];
@@ -817,7 +819,8 @@ if (empty($allStreams)) {
             $transcodeHtml = " <i class='fa fa-info-circle as-transcode' style='opacity:0.6; cursor:help;' title='$infoTooltip'></i>";
         }
         
-        echo "<div class='as-row'>";
+        $sessionId = htmlspecialchars((string)($s['session_id'] ?? ''));
+        echo "<div class='as-row' data-session-id='$sessionId'>";
         
         echo "<span class='as-server' style='color:$typeColor;' title='$serverName ($serverType)'>
                 <i class='fa fa-circle' style='font-size:8px;'></i>
