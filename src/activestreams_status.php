@@ -65,13 +65,13 @@ function buildStatusCurlHandles($server) {
 
         case 'emby':
             $sessionsUrl = "$protocol://{$server['host']}:{$server['port']}/emby/Sessions";
-            $recordingUrl = "$protocol://{$server['host']}:{$server['port']}/emby/LiveTv/Timers";
+            $recordingUrl = "$protocol://{$server['host']}:{$server['port']}/emby/LiveTv/Recordings?IsInProgress=true";
             $headers = ['X-Emby-Token: ' . $server['token']];
             break;
 
         case 'jellyfin':
             $sessionsUrl = "$protocol://{$server['host']}:{$server['port']}/Sessions";
-            $recordingUrl = "$protocol://{$server['host']}:{$server['port']}/LiveTv/Timers";
+            $recordingUrl = "$protocol://{$server['host']}:{$server['port']}/LiveTv/Recordings?IsInProgress=true";
             $headers = ['Authorization: MediaBrowser Client="ActiveStreams", Device="Unraid", DeviceId="activestreams-plugin", Version="1.0.0", Token="' . $server['token'] . '"'];
             break;
 

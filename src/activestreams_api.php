@@ -654,11 +654,11 @@ function checkServerRecording($server) {
             $headers = ['Accept: application/json', 'X-Plex-Token: ' . $server['token']];
             break;
         case 'emby':
-            $url = "$protocol://{$server['host']}:{$server['port']}/emby/LiveTv/Timers";
+            $url = "$protocol://{$server['host']}:{$server['port']}/emby/LiveTv/Recordings?IsInProgress=true";
             $headers = ['X-Emby-Token: ' . $server['token']];
             break;
         case 'jellyfin':
-            $url = "$protocol://{$server['host']}:{$server['port']}/LiveTv/Timers";
+            $url = "$protocol://{$server['host']}:{$server['port']}/LiveTv/Recordings?IsInProgress=true";
             $headers = ['Authorization: MediaBrowser Client="ActiveStreams", Device="Unraid", DeviceId="activestreams-plugin", Version="1.0.0", Token="' . $server['token'] . '"'];
             break;
         default:
