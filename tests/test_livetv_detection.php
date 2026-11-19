@@ -29,25 +29,19 @@ assertTrue(detectEmbyJellyfinLiveTv([['NowPlayingItem' => ['Type' => 'TvChannel'
 assertTrue(detectEmbyJellyfinLiveTv([['NowPlayingItem' => ['Type' => 'Episode']]]) === false, 'emby/jellyfin regular playback = false');
 assertTrue(detectEmbyJellyfinLiveTv([]) === false, 'emby/jellyfin no sessions = false');
 
-// Emby/Jellyfin recording: Timers with Status == InProgress, both response envelopes
-assertTrue(detectEmbyJellyfinRecording(['Items' => [['Status' => 'InProgress']]]) === true, 'emby Items-wrapped InProgress timer detected');
-assertTrue(detectEmbyJellyfinRecording([['Status' => 'InProgress']]) === true, 'jellyfin bare-array InProgress timer detected');
-assertTrue(detectEmbyJellyfinRecording(['Items' => [['Status' => 'Cancelled']]]) === false, 'non-InProgress timer = false');
-assertTrue(detectEmbyJellyfinRecording(['Items' => []]) === false, 'no timers = false');
-
 // Emby/Jellyfin active recordings list: used to synthesize a stream-list row
 // for a background recording with no viewer (Emby/Jellyfin create no
 // session at all for that case, unlike Plex - confirmed on a real
 // in-progress recording, "NBC5 News Now at 3PM", with zero matching session).
 assertTrue(
-    getEmbyJellyfinActiveRecordings(['Items' => [['Id' => '123', 'Status' => 'InProgress', 'Name' => 'NBC5 News Now at 3PM', 'SeriesName' => 'NBC5 News Now at 3PM']]])
-        === [['id' => '123', 'name' => 'NBC5 News Now at 3PM']],
-    'getEmbyJellyfinActiveRecordings: series name used when Name == SeriesName'
+    getEmbyJellyfinActiveRecordings(['Items' => [['Id' => '123', 'Status' => 'InProgress', 'Name' => 'NBC5 News Now at 3PM', 'SeriesName' => 'NBC5 News Now at 3PM', 'ChannelId' => '3554911']]])
+        === [['id' => '123', 'name' => 'NBC5 News Now at 3PM', 'channel_id' => '3554911']],
+    'getEmbyJellyfinActiveRecordings: series name used when Name == SeriesName, channel_id captured'
 );
 assertTrue(
     getEmbyJellyfinActiveRecordings(['Items' => [['Id' => '456', 'Status' => 'InProgress', 'Name' => 'Pilot', 'SeriesName' => 'The Institute']]])
-        === [['id' => '456', 'name' => 'The Institute - Pilot']],
-    'getEmbyJellyfinActiveRecordings: series + episode name combined'
+        === [['id' => '456', 'name' => 'The Institute - Pilot', 'channel_id' => null]],
+    'getEmbyJellyfinActiveRecordings: series + episode name combined, missing channel_id is null'
 );
 assertTrue(getEmbyJellyfinActiveRecordings(['Items' => [['Id' => '789', 'Status' => 'Cancelled']]]) === [], 'getEmbyJellyfinActiveRecordings: non-InProgress excluded');
 assertTrue(getEmbyJellyfinActiveRecordings(['Items' => []]) === [], 'getEmbyJellyfinActiveRecordings: empty when no recordings');

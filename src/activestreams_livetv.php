@@ -90,35 +90,6 @@ function detectEmbyJellyfinLiveTv($sessionsData) {
 }
 
 /**
- * Detect if any Emby/Jellyfin timer is recording in progress
- *
- * Handles both Emby (Items-wrapped) and Jellyfin (bare-array) response formats
- *
- * @param array $timersData Either {'Items': [...]} or [...]
- * @return bool True if any timer has Status="InProgress"
- */
-function detectEmbyJellyfinRecording($timersData) {
-    if (!is_array($timersData)) {
-        return false;
-    }
-
-    // Emby format: {'Items': [...]}
-    $timersList = isset($timersData['Items']) ? $timersData['Items'] : $timersData;
-
-    if (!is_array($timersList)) {
-        return false;
-    }
-
-    foreach ($timersList as $timer) {
-        if (isset($timer['Status']) && $timer['Status'] === 'InProgress') {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/**
  * Return the list of currently in-progress Emby/Jellyfin recordings.
  *
  * Unlike Plex (which always creates a live session entry for an active
@@ -127,9 +98,16 @@ function detectEmbyJellyfinRecording($timersData) {
  * nothing in Sessions to represent it. This list is used to synthesize a
  * stream-list row for exactly that case.
  *
+ * channel_id is the recording's ChannelId, for matching against a live
+ * session's own channel item id (NowPlayingItem.Id when Type==TvChannel) -
+ * confirmed on real data that a server can have an unrelated recording
+ * (different channel) running at the same time as a live viewer, and a
+ * global "something is recording" match incorrectly marked the live
+ * viewer's unrelated channel as also being recorded.
+ *
  * @param array $recordingsData Decoded Emby/Jellyfin
  *   /LiveTv/Recordings?IsInProgress=true response ({'Items': [...]})
- * @return array<array{id: string, name: string}> in-progress recordings
+ * @return array<array{id: string, name: string, channel_id: ?string}> in-progress recordings
  */
 function getEmbyJellyfinActiveRecordings($recordingsData) {
     if (!is_array($recordingsData)) {
@@ -154,7 +132,8 @@ function getEmbyJellyfinActiveRecordings($recordingsData) {
 
         $recordings[] = [
             'id' => (string)($item['Id'] ?? ''),
-            'name' => $name
+            'name' => $name,
+            'channel_id' => isset($item['ChannelId']) ? (string)$item['ChannelId'] : null
         ];
     }
 

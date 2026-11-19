@@ -301,29 +301,33 @@ EOT;
         var $incoming = $('<div>').html(data);
         var $incomingRows = $incoming.find('.as-row');
         var seenKeys = {};
-        var $out = $('<div>');
+        var order = [];
+        var htmlByKey = {};
 
         $incomingRows.each(function() {
             var $row = $(this);
             var key = rowKey($row);
             var html = $row.prop('outerHTML');
             seenKeys[key] = true;
+            order.push(key);
 
             var state = asRowState[key];
 
             if (!state) {
                 // First time seeing this row's identity - show it immediately,
                 // nothing to debounce against yet.
-                asRowState[key] = { html: html, pendingHtml: null, streak: 0 };
-                $out.append(html);
+                asRowState[key] = { html: html, pendingHtml: null, streak: 0, missingStreak: 0 };
+                htmlByKey[key] = html;
                 return;
             }
+
+            state.missingStreak = 0;
 
             if (html === state.html) {
                 // Unchanged from what's displayed - clear any pending flap.
                 state.pendingHtml = null;
                 state.streak = 0;
-                $out.append(state.html);
+                htmlByKey[key] = state.html;
                 return;
             }
 
@@ -339,21 +343,37 @@ EOT;
                 state.html = html;
                 state.pendingHtml = null;
                 state.streak = 0;
-                $out.append(state.html);
-            } else {
-                // Only seen once so far - keep showing the previous content.
-                $out.append(state.html);
             }
+            // Either way (accepted or still only seen once), show the
+            // current held content - never the raw one-off incoming value.
+            htmlByKey[key] = state.html;
         });
 
-        // Drop state for rows that no longer appear at all (stream actually ended).
+        // A row missing from this poll isn't necessarily gone - the same
+        // session-reporting flakiness that flaps a row's content (handled
+        // above) can also drop it from the response entirely for a single
+        // poll. Keep showing it, in its last known position, until it's
+        // been absent for 2 consecutive polls; only then treat it as
+        // actually ended and stop showing/tracking it.
         for (var key in asRowState) {
-            if (!seenKeys[key]) {
+            if (seenKeys[key]) continue;
+
+            var missingState = asRowState[key];
+            missingState.missingStreak++;
+
+            if (missingState.missingStreak >= 2) {
                 delete asRowState[key];
+            } else {
+                order.push(key);
+                htmlByKey[key] = missingState.html;
             }
         }
 
-        return $out.html() || '';
+        var outHtml = '';
+        for (var i = 0; i < order.length; i++) {
+            outHtml += htmlByKey[order[i]];
+        }
+        return outHtml;
     }
 
     function updateActiveStreamsDashboard() {

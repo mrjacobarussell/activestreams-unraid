@@ -458,6 +458,7 @@ function parseEmbyJellyfinResponse($server, $response) {
                 'progress' => $position,
                 'duration' => $duration,
                 'live' => ($item['Type'] ?? '') === 'TvChannel',
+                'channel_id' => ($item['Type'] ?? '') === 'TvChannel' ? (isset($item['Id']) ? (string)$item['Id'] : null) : null,
                 'session_id' => $session['Id'] ?? null,
                 'transcoding' => $isTranscoding,
                 'transcode_details' => $transcodeDetails
@@ -628,42 +629,29 @@ function parseDispatcharrResponse($server, $response) {
 }
 
 /**
- * One extra, synchronous request per server (only called for a server that
- * actually has a live stream) returning which specific live sessions are
- * currently being recorded.
- *
- * For Plex, returns the exact set of episode guids currently being
- * recorded (per getPlexRecordingGuids) — confirmed against two
+ * One extra, synchronous request for a Plex server (only called when it
+ * has a live stream) returning the exact set of episode guids currently
+ * being recorded (per getPlexRecordingGuids) — confirmed against two
  * simultaneous real recordings plus a real live-only viewer that this
  * exact-guid match correctly distinguishes a session being recorded from
- * a session that's merely being watched live. For Emby/Jellyfin, no
- * confirmed per-session matching field is known yet, so this falls back
- * to a '*' sentinel meaning "something is recording on this server" —
- * every live session on that server is marked recording, which is a
- * known coarser approximation for those two platforms only.
+ * a session that's merely being watched live.
  *
- * @return array<string> guids currently recording, or ['*'] for the
- *   Emby/Jellyfin any-live-session fallback, or [] if nothing is recording
+ * Emby/Jellyfin use a separate, channel-id-based match instead (see
+ * getEmbyJellyfinRecordingItems and its caller) - confirmed live that a
+ * cruder "is anything on this server recording" match (what this function
+ * used to also do for those two platforms) incorrectly marked an unrelated
+ * live channel as recording just because a different channel was.
+ *
+ * @return array<string> episode guids currently recording, or [] if none
  */
 function checkServerRecording($server) {
-    $protocol = ($server['ssl'] === '1' || $server['ssl'] === true) ? 'https' : 'http';
-
-    switch ($server['type']) {
-        case 'plex':
-            $url = "$protocol://{$server['host']}:{$server['port']}/media/subscriptions/scheduled";
-            $headers = ['Accept: application/json', 'X-Plex-Token: ' . $server['token']];
-            break;
-        case 'emby':
-            $url = "$protocol://{$server['host']}:{$server['port']}/emby/LiveTv/Recordings?IsInProgress=true";
-            $headers = ['X-Emby-Token: ' . $server['token']];
-            break;
-        case 'jellyfin':
-            $url = "$protocol://{$server['host']}:{$server['port']}/LiveTv/Recordings?IsInProgress=true";
-            $headers = ['Authorization: MediaBrowser Client="ActiveStreams", Device="Unraid", DeviceId="activestreams-plugin", Version="1.0.0", Token="' . $server['token'] . '"'];
-            break;
-        default:
-            return [];
+    if ($server['type'] !== 'plex') {
+        return [];
     }
+
+    $protocol = ($server['ssl'] === '1' || $server['ssl'] === true) ? 'https' : 'http';
+    $url = "$protocol://{$server['host']}:{$server['port']}/media/subscriptions/scheduled";
+    $headers = ['Accept: application/json', 'X-Plex-Token: ' . $server['token']];
 
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
@@ -688,10 +676,7 @@ function checkServerRecording($server) {
         return [];
     }
 
-    if ($server['type'] === 'plex') {
-        return getPlexRecordingGuids($data);
-    }
-    return detectEmbyJellyfinRecording($data) ? ['*'] : [];
+    return getPlexRecordingGuids($data);
 }
 
 /**
@@ -790,16 +775,11 @@ foreach ($handles as $index => $ch) {
             }
         }
 
-        if ($hasLiveStream && in_array($server['type'], ['plex', 'emby', 'jellyfin'], true)) {
+        if ($hasLiveStream && $server['type'] === 'plex') {
             $recordingGuids = checkServerRecording($server);
-            $recordAnyLive = in_array('*', $recordingGuids, true);
-
             if (!empty($recordingGuids)) {
                 foreach ($result['streams'] as &$stream) {
-                    if (empty($stream['live'])) {
-                        continue;
-                    }
-                    if ($recordAnyLive || in_array($stream['guid'] ?? null, $recordingGuids, true)) {
+                    if (!empty($stream['live']) && in_array($stream['guid'] ?? null, $recordingGuids, true)) {
                         $stream['recording'] = true;
                     }
                 }
@@ -807,41 +787,52 @@ foreach ($handles as $index => $ch) {
             }
         }
 
-        // Emby/Jellyfin create no session at all for a background recording
-        // with no viewer (confirmed live: a real in-progress recording had
-        // zero matching session), unlike Plex which always has one. Checked
-        // unconditionally, not gated on $hasLiveStream, since that's exactly
-        // the case with nothing live to gate on. Skipped if a live+recording
-        // row already exists for this server, to avoid a near-duplicate row
-        // when something is both being watched live and recorded at once.
+        // Emby/Jellyfin: matched by channel id, not "is anything on this
+        // server recording" - confirmed live that an unrelated recording
+        // (different channel) running at the same time as a live viewer
+        // incorrectly marked the live viewer's row as also recording under
+        // a global any-match approach. Checked unconditionally, not gated
+        // on $hasLiveStream, since a no-viewer recording is exactly the
+        // case this exists for (Emby/Jellyfin create no session at all for
+        // that case, unlike Plex which always has one).
         if (in_array($server['type'], ['emby', 'jellyfin'], true)) {
-            $alreadyHasRecordingRow = false;
-            foreach ($result['streams'] as $stream) {
-                if (!empty($stream['live']) && !empty($stream['recording'])) {
-                    $alreadyHasRecordingRow = true;
-                    break;
+            $recordingItems = getEmbyJellyfinRecordingItems($server);
+            $recordingChannelIds = [];
+            foreach ($recordingItems as $recording) {
+                if ($recording['channel_id'] !== null) {
+                    $recordingChannelIds[] = $recording['channel_id'];
                 }
             }
 
-            if (!$alreadyHasRecordingRow) {
-                foreach (getEmbyJellyfinRecordingItems($server) as $recording) {
-                    $result['streams'][] = [
-                        'server_name' => $server['name'],
-                        'server_type' => $server['type'],
-                        'title' => $recording['name'],
-                        'user' => '—',
-                        'device' => '—',
-                        'state' => 'playing',
-                        'progress' => 0,
-                        'duration' => 0,
-                        'live' => true,
-                        'guid' => null,
-                        'session_id' => 'recording-' . $recording['id'],
-                        'recording' => true,
-                        'transcoding' => false,
-                        'transcode_details' => []
-                    ];
+            $matchedChannelIds = [];
+            foreach ($result['streams'] as &$stream) {
+                if (!empty($stream['live']) && in_array($stream['channel_id'] ?? null, $recordingChannelIds, true)) {
+                    $stream['recording'] = true;
+                    $matchedChannelIds[] = $stream['channel_id'];
                 }
+            }
+            unset($stream);
+
+            foreach ($recordingItems as $recording) {
+                if ($recording['channel_id'] !== null && in_array($recording['channel_id'], $matchedChannelIds, true)) {
+                    continue; // already represented by a matched live row above
+                }
+                $result['streams'][] = [
+                    'server_name' => $server['name'],
+                    'server_type' => $server['type'],
+                    'title' => $recording['name'],
+                    'user' => '—',
+                    'device' => '—',
+                    'state' => 'playing',
+                    'progress' => 0,
+                    'duration' => 0,
+                    'live' => true,
+                    'guid' => null,
+                    'session_id' => 'recording-' . $recording['id'],
+                    'recording' => true,
+                    'transcoding' => false,
+                    'transcode_details' => []
+                ];
             }
         }
 
