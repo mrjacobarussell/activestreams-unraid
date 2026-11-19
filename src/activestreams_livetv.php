@@ -32,8 +32,13 @@ function detectPlexLiveTv($sessionsData) {
 /**
  * Detect if any Plex activity is a recording in progress
  *
- * @param array $activitiesData Decoded Plex /status/sessions response with Activity
- * @return bool True if any Activity has type="livetv.recording"
+ * Confirmed against a real in-progress DVR recording: Plex's actual activity
+ * type is "grabber.grab" (Context.status == "inprogress"), not
+ * "livetv.recording" as originally assumed from docs alone. "livetv.recording"
+ * is kept as a fallback match in case a different PMS version uses it.
+ *
+ * @param array $activitiesData Decoded Plex /activities response
+ * @return bool True if any Activity is a recording currently in progress
  */
 function detectPlexRecording($activitiesData) {
     if (!isset($activitiesData['MediaContainer']['Activity'])) {
@@ -46,7 +51,17 @@ function detectPlexRecording($activitiesData) {
     }
 
     foreach ($activities as $activity) {
-        if (isset($activity['type']) && $activity['type'] === 'livetv.recording') {
+        $type = $activity['type'] ?? '';
+
+        if ($type === 'grabber.grab') {
+            $status = $activity['Context']['status'] ?? '';
+            if ($status === 'inprogress') {
+                return true;
+            }
+            continue;
+        }
+
+        if ($type === 'livetv.recording') {
             return true;
         }
     }

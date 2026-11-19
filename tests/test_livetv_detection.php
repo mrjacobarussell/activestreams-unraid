@@ -10,8 +10,12 @@ assertTrue(detectPlexLiveTv(['MediaContainer' => ['Metadata' => [['live' => 1]]]
 assertTrue(detectPlexLiveTv(['MediaContainer' => ['Metadata' => [['title' => 'Movie']]]]) === false, 'plex no live flag = false');
 assertTrue(detectPlexLiveTv(['MediaContainer' => []]) === false, 'plex empty sessions = false');
 
-// Plex recording: an Activity with type livetv.recording
-assertTrue(detectPlexRecording(['MediaContainer' => ['Activity' => [['type' => 'livetv.recording']]]]) === true, 'plex recording activity detected');
+// Plex recording: confirmed against a real in-progress DVR recording on 2026-11-19 —
+// Plex actually reports type=grabber.grab with Context.status=inprogress, not
+// "livetv.recording" (that string is kept below only as a documented fallback).
+assertTrue(detectPlexRecording(['MediaContainer' => ['Activity' => [['type' => 'grabber.grab', 'title' => 'Recording', 'Context' => ['status' => 'inprogress']]]]]) === true, 'plex grabber.grab inprogress = real recording detected');
+assertTrue(detectPlexRecording(['MediaContainer' => ['Activity' => [['type' => 'grabber.grab', 'Context' => ['status' => 'complete']]]]]) === false, 'plex grabber.grab not inprogress = false');
+assertTrue(detectPlexRecording(['MediaContainer' => ['Activity' => [['type' => 'livetv.recording']]]]) === true, 'plex livetv.recording fallback still detected');
 assertTrue(detectPlexRecording(['MediaContainer' => ['Activity' => [['type' => 'media.generate']]]]) === false, 'plex unrelated activity = false');
 assertTrue(detectPlexRecording(['MediaContainer' => []]) === false, 'plex no activities = false');
 
