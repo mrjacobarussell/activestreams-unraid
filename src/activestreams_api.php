@@ -334,7 +334,16 @@ function parseEmbyJellyfinResponse($server, $response) {
             $item = $session['NowPlayingItem'];
             $episodeName = $item['Name'] ?? 'Unknown';
 
-            if (isset($item['SeriesName'])) {
+            if (($item['Type'] ?? '') === 'TvChannel' && isset($item['CurrentProgram']['Name'])) {
+                // For a live channel, $item['Name'] is the raw channel
+                // callsign (e.g. "KXAS-HD") - CurrentProgram.Name is the
+                // actual show airing (e.g. "NBC5 News Now at 3PM"), which
+                // is what a person actually recognizes at a glance.
+                $programName = $item['CurrentProgram']['Name'];
+                $title = ($episodeName !== '' && $episodeName !== $programName)
+                    ? "$programName ($episodeName)"
+                    : $programName;
+            } elseif (isset($item['SeriesName'])) {
                 $seriesTitle = $item['SeriesName'];
                 
                 if ($showEpisodeNumbers && isset($item['ParentIndexNumber']) && isset($item['IndexNumber'])) {
