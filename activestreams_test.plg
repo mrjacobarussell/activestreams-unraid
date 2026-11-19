@@ -1,8 +1,8 @@
 <?xml version='1.0' standalone='yes'?>
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "activestreams">
-<!ENTITY author    "gthrift">
-<!ENTITY version   "2026.08.20-beta3">
+<!ENTITY author    "mrjacobarussell (fork of gthrift)">
+<!ENTITY version   "2026.11.19-serverstatus">
 <!ENTITY launch    "Settings/ActiveStreamsSettings">
 <!ENTITY gitURL    "https://raw.githubusercontent.com/gthrift/activestreams-unraid/main
 <!ENTITY pluginURL "&gitURL;/activestreams_test.plg">
