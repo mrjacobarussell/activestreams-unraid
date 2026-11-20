@@ -638,104 +638,51 @@ function parseDispatcharrResponse($server, $response) {
 }
 
 /**
- * One extra, synchronous request for a Plex server (only called when it
- * has a live stream) returning the exact set of episode guids currently
- * being recorded (per getPlexRecordingGuids) — confirmed against two
- * simultaneous real recordings plus a real live-only viewer that this
- * exact-guid match correctly distinguishes a session being recorded from
- * a session that's merely being watched live.
+ * Build the recording-leg curl handle for a plex/emby/jellyfin server - the
+ * second, parallel request (alongside the normal Sessions request) that
+ * detects in-progress recordings. Returns null for any other server type.
  *
- * Emby/Jellyfin use a separate, channel-id-based match instead (see
- * getEmbyJellyfinRecordingItems and its caller) - confirmed live that a
- * cruder "is anything on this server recording" match (what this function
- * used to also do for those two platforms) incorrectly marked an unrelated
- * live channel as recording just because a different channel was.
- *
- * @return array<string> episode guids currently recording, or [] if none
+ * Batched into the same curl_multi round as every other request (see the
+ * main loop below) rather than fetched separately afterward - a separate
+ * sequential fetch added a full extra network round-trip per poll for
+ * every Emby/Jellyfin server, which is needless latency over anything
+ * slower than localhost (a remote/VPN connection, for instance).
  */
-function checkServerRecording($server) {
-    if ($server['type'] !== 'plex') {
-        return [];
+function buildRecordingCurlHandle($server) {
+    if (!in_array($server['type'], ['plex', 'emby', 'jellyfin'], true)) {
+        return null;
     }
 
     $protocol = ($server['ssl'] === '1' || $server['ssl'] === true) ? 'https' : 'http';
-    $url = "$protocol://{$server['host']}:{$server['port']}/media/subscriptions/scheduled";
-    $headers = ['Accept: application/json', 'X-Plex-Token: ' . $server['token']];
 
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    $sslVerify = isset($server['ssl_verify']) && ($server['ssl_verify'] === '1' || $server['ssl_verify'] === true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $sslVerify);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $sslVerify ? 2 : 0);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-    $response = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($http_code !== 200 || !$response) {
-        return [];
+    switch ($server['type']) {
+        case 'plex':
+            $url = "$protocol://{$server['host']}:{$server['port']}/media/subscriptions/scheduled";
+            $headers = ['Accept: application/json', 'X-Plex-Token: ' . $server['token']];
+            break;
+        case 'emby':
+            $url = "$protocol://{$server['host']}:{$server['port']}/emby/LiveTv/Recordings?IsInProgress=true";
+            $headers = ['X-Emby-Token: ' . $server['token']];
+            break;
+        case 'jellyfin':
+            $url = "$protocol://{$server['host']}:{$server['port']}/LiveTv/Recordings?IsInProgress=true";
+            $headers = ['Authorization: MediaBrowser Client="ActiveStreams", Device="Unraid", DeviceId="activestreams-plugin", Version="1.0.0", Token="' . $server['token'] . '"'];
+            break;
     }
 
-    $data = json_decode($response, true);
-    if (!is_array($data)) {
-        return [];
-    }
-
-    return getPlexRecordingGuids($data);
+    return makeCurl($url, $headers, $server);
 }
 
-/**
- * Fetch the list of currently in-progress recordings for an Emby/Jellyfin
- * server, for synthesizing a stream-list row representing a background
- * recording with no viewer (see getEmbyJellyfinActiveRecordings' docblock
- * for why this is needed - Emby/Jellyfin create no session at all for that
- * case, unlike Plex).
- *
- * @return array<array{id: string, name: string}>
- */
-function getEmbyJellyfinRecordingItems($server) {
-    if (!in_array($server['type'], ['emby', 'jellyfin'], true)) {
-        return [];
-    }
-
-    $protocol = ($server['ssl'] === '1' || $server['ssl'] === true) ? 'https' : 'http';
-
-    if ($server['type'] === 'emby') {
-        $url = "$protocol://{$server['host']}:{$server['port']}/emby/LiveTv/Recordings?IsInProgress=true";
-        $headers = ['X-Emby-Token: ' . $server['token']];
-    } else {
-        $url = "$protocol://{$server['host']}:{$server['port']}/LiveTv/Recordings?IsInProgress=true";
-        $headers = ['Authorization: MediaBrowser Client="ActiveStreams", Device="Unraid", DeviceId="activestreams-plugin", Version="1.0.0", Token="' . $server['token'] . '"'];
-    }
-
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    $sslVerify = isset($server['ssl_verify']) && ($server['ssl_verify'] === '1' || $server['ssl_verify'] === true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $sslVerify);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $sslVerify ? 2 : 0);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-    $response = curl_exec($ch);
+function decodeRecordingLeg($ch) {
+    $response = curl_multi_getcontent($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
 
     if ($http_code !== 200 || !$response) {
-        return [];
+        return null;
     }
 
     $data = json_decode($response, true);
-    if (!is_array($data)) {
-        return [];
-    }
-
-    return getEmbyJellyfinActiveRecordings($data);
+    return is_array($data) ? $data : null;
 }
 
 $allStreams = [];
@@ -743,6 +690,7 @@ $errors = [];
 
 $mh = curl_multi_init();
 $handles = [];
+$recordingHandles = [];
 $serverMap = [];
 
 foreach ($servers as $index => $server) {
@@ -754,6 +702,12 @@ foreach ($servers as $index => $server) {
         $handles[$index] = $ch;
         $serverMap[$index] = $server;
         curl_multi_add_handle($mh, $ch);
+
+        $recordingCh = buildRecordingCurlHandle($server);
+        if ($recordingCh !== null) {
+            $recordingHandles[$index] = $recordingCh;
+            curl_multi_add_handle($mh, $recordingCh);
+        }
     } else {
         $errors[] = "{$server['name']}: Unknown server type";
     }
@@ -773,6 +727,8 @@ foreach ($handles as $index => $ch) {
 
     $result = processServerResponse($server, $response, $http_code, $curl_error);
 
+    $recordingData = isset($recordingHandles[$index]) ? decodeRecordingLeg($recordingHandles[$index]) : null;
+
     if (isset($result['error'])) {
         $errors[] = "{$server['name']}: {$result['error']}";
     } elseif (isset($result['streams'])) {
@@ -784,8 +740,8 @@ foreach ($handles as $index => $ch) {
             }
         }
 
-        if ($hasLiveStream && $server['type'] === 'plex') {
-            $recordingGuids = checkServerRecording($server);
+        if ($hasLiveStream && $server['type'] === 'plex' && $recordingData !== null) {
+            $recordingGuids = getPlexRecordingGuids($recordingData);
             if (!empty($recordingGuids)) {
                 foreach ($result['streams'] as &$stream) {
                     if (!empty($stream['live']) && in_array($stream['guid'] ?? null, $recordingGuids, true)) {
@@ -805,7 +761,7 @@ foreach ($handles as $index => $ch) {
         // case this exists for (Emby/Jellyfin create no session at all for
         // that case, unlike Plex which always has one).
         if (in_array($server['type'], ['emby', 'jellyfin'], true)) {
-            $recordingItems = getEmbyJellyfinRecordingItems($server);
+            $recordingItems = $recordingData !== null ? getEmbyJellyfinActiveRecordings($recordingData) : [];
             $recordingChannelIds = [];
             foreach ($recordingItems as $recording) {
                 if ($recording['channel_id'] !== null) {
@@ -850,6 +806,11 @@ foreach ($handles as $index => $ch) {
 
     curl_multi_remove_handle($mh, $ch);
     curl_close($ch);
+
+    if (isset($recordingHandles[$index])) {
+        curl_multi_remove_handle($mh, $recordingHandles[$index]);
+        curl_close($recordingHandles[$index]);
+    }
 }
 
 curl_multi_close($mh);
