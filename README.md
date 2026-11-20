@@ -32,9 +32,13 @@ This project is an unofficial community plugin and is not affiliated with, endor
 
 ## Preview
 
-| Dashboard Widget | Live TV / Recording (this fork) |
-| :--- | :--- |
-| ![Dashboard Example](https://raw.githubusercontent.com/gthrift/activestreams-unraid/main/metadata/widget_preview.png) | ![Live TV and Recording status example](metadata/live_recording_example.png) |
+**Dashboard Widget**
+
+![Dashboard Example](https://raw.githubusercontent.com/gthrift/activestreams-unraid/main/metadata/widget_preview.png)
+
+**Live TV / Recording (this fork)**
+
+![Live TV and Recording status example](metadata/live_recording_example.png)
 
 
 
