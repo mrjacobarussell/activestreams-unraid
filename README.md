@@ -2,6 +2,14 @@
 
 Active Streams is a lightweight Unraid plugin that adds a real-time dashboard widget to monitor active media streams from **Plex**, **Emby**, **Jellyfin**, and **Dispatcharr** servers directly from your Unraid WebGUI.
 
+This is [mrjacobarussell's fork](https://github.com/mrjacobarussell/activestreams-unraid) of the original plugin by [gthrift](https://github.com/gthrift/activestreams-unraid) ([forum thread](https://forums.unraid.net/topic/196336-plugin-active-streams-display-your-active-embyjellyfinplex-streams-on-your-dashboard/)). The changes here are proposed back upstream as [PR #46](https://github.com/gthrift/activestreams-unraid/pull/46) — see **What's New in This Fork** below for what's different.
+
+## What's New in This Fork
+
+- **Live TV / Recording status**: Plex, Emby, and Jellyfin live TV sessions now show "Live" or "Recording" instead of a generic "Playing" with a meaningless 0:00/0:00 duration
+- **Background recordings, no viewer required**: Emby/Jellyfin recordings with nobody watching (which otherwise have no representation at all, since those platforms create no session for that case) now show as their own row
+- **Dispatcharr support merged in**: brings in [upstream PR #43](https://github.com/gthrift/activestreams-unraid/pull/43), which added Dispatcharr live/VOD monitoring but was unmerged on the original repo
+
 ## Disclaimer
 
 This project is an unofficial community plugin and is not affiliated with, endorsed by, or associated with Plex®, Emby®, Jellyfin®, or Dispatcharr.
