@@ -34,11 +34,11 @@ This project is an unofficial community plugin and is not affiliated with, endor
 
 **Dashboard Widget**
 
-![Dashboard Example](https://raw.githubusercontent.com/gthrift/activestreams-unraid/main/metadata/widget_preview.png)
+<img src="https://raw.githubusercontent.com/gthrift/activestreams-unraid/main/metadata/widget_preview.png" alt="Dashboard Example" width="700">
 
 **Live TV / Recording (this fork)**
 
-![Live TV and Recording status example](metadata/live_recording_example.png)
+<img src="metadata/live_recording_example.png" alt="Live TV and Recording status example" width="700">
 
 
 
