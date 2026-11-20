@@ -43,7 +43,14 @@ This project is an unofficial community plugin and is not affiliated with, endor
 1. Log in to your Unraid WebGUI.
 2. Navigate to the **Plugins** tab.
 3. Click on the **Install Plugin** sub-tab.
-4. Copy and paste the following URL into the box:
+4. Copy and paste one of the following URLs into the box:
+
+   **This fork** (Dispatcharr support + Live TV/Recording status, installs directly from GitHub, no package build required):
+   ```text
+   https://raw.githubusercontent.com/mrjacobarussell/activestreams-unraid/main/activestreams_test.plg
+   ```
+
+   **Original plugin** (gthrift's upstream, without this fork's changes):
    ```text
    https://raw.githubusercontent.com/gthrift/activestreams-unraid/main/activestreams.plg
    ```
